@@ -106,3 +106,58 @@ class Pump:
         if self.bep_q:
             return (self.bep_q * lower_pct, self.bep_q * upper_pct)
         return None
+
+    def get_trimmed_pump(self, new_diameter: float) -> 'Pump':
+        """
+        Creates a new Pump object scaled for a trimmed impeller using diameter affinity laws.
+        WARNING: This is a geometric approximation. Reality diverges if trim > 10-20%.
+        Q2 = Q1 * (D2/D1)
+        H2 = H1 * (D2/D1)^2
+        P2 = P1 * (D2/D1)^3
+        """
+        if not self.metadata.impeller_diameter:
+            raise ValueError("Base pump impeller_diameter must be known to apply trimming rules.")
+            
+        ratio = new_diameter / self.metadata.impeller_diameter
+        
+        if ratio < 0.75:
+            # Add a warning mechanism, or just log. We will just pass it to the notes.
+            pass
+            
+        # Scale H Curve
+        h_q_new = [q * ratio for q in self.h_curve.raw_data.x]
+        h_h_new = [h * (ratio**2) for h in self.h_curve.raw_data.y]
+        new_h_curve = Curve(CurveData(x=h_q_new, y=h_h_new), name=f"{self.h_curve.name} (Trim {new_diameter})")
+        
+        # Scale Eff Curve - Eff usually drops with trim, but we keep homologous points for basic affinity
+        new_eff_curve = None
+        if self.eff_curve:
+            eff_q_new = [q * ratio for q in self.eff_curve.raw_data.x]
+            # Standard affinity assumes eff is constant at homologous points, though reality is slightly lower.
+            new_eff_curve = Curve(CurveData(x=eff_q_new, y=self.eff_curve.raw_data.y), name=f"{self.eff_curve.name} (Trim {new_diameter})")
+            
+        # Scale Power Curve
+        new_p_curve = None
+        if self.power_curve:
+            p_q_new = [q * ratio for q in self.power_curve.raw_data.x]
+            p_p_new = [p * (ratio**3) for p in self.power_curve.raw_data.y]
+            new_p_curve = Curve(CurveData(x=p_q_new, y=p_p_new), name=f"{self.power_curve.name} (Trim {new_diameter})")
+            
+        # NPSHr
+        new_npshr_curve = None
+        if self.npshr_curve:
+            npshr_q_new = [q * ratio for q in self.npshr_curve.raw_data.x]
+            npshr_h_new = [h * (ratio**2) for h in self.npshr_curve.raw_data.y]
+            new_npshr_curve = Curve(CurveData(x=npshr_q_new, y=npshr_h_new), name=f"{self.npshr_curve.name} (Trim {new_diameter})")
+            
+        new_meta = self.metadata.model_copy()
+        new_meta.impeller_diameter = new_diameter
+        new_meta.notes = f"{(new_meta.notes or '')} | Trimmed from {self.metadata.impeller_diameter} to {new_diameter} (Ratio: {ratio:.3f})"
+        
+        return Pump(
+            h_curve=new_h_curve,
+            eff_curve=new_eff_curve,
+            power_curve=new_p_curve,
+            npshr_curve=new_npshr_curve,
+            metadata=new_meta
+        )

@@ -1,7 +1,8 @@
-from typing import Union
+from typing import Union, List, Tuple
 import numpy as np
 from pydantic import BaseModel
 from pump_system_analyzer.core.curve import Curve, SystemCurve
+from pump_system_analyzer.core.valves import ControlValve
 
 class PipingComponent(BaseModel):
     name: str
@@ -34,7 +35,8 @@ class HydraulicSystem:
             self.static_head = self._compute_static_head()
             
         self.k_system = 0.0
-        self.components = []
+        self.components: List[PipingComponent] = []
+        self.control_valves: List[Tuple[ControlValve, float]] = [] # list of (valve, opening_fraction)
         self.custom_curve = None
         
     def _compute_static_head(self) -> float:
@@ -48,18 +50,25 @@ class HydraulicSystem:
         self.k_system += k
         self.components.append(PipingComponent(name=name, k_factor=k))
         
+    def add_control_valve(self, valve: ControlValve, opening_fraction: float = 1.0):
+        self.control_valves.append((valve, opening_fraction))
+        
     def set_custom_curve(self, curve: Curve):
         """Allows setting a measured or complex system curve."""
         self.custom_curve = curve
 
-    def get_curve(self) -> Union[SystemCurve, Curve]:
-        if self.custom_curve:
-            return self.custom_curve
-        return SystemCurve(h_stat=self.static_head, k=self.k_system)
-
     def evaluate(self, q: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-        curve = self.get_curve()
-        return curve.evaluate(q)
+        if self.custom_curve:
+            return self.custom_curve.evaluate(q)
+            
+        # Base system curve (static + K*Q^2)
+        h = self.static_head + self.k_system * (np.array(q) ** 2)
+        
+        # Add control valve losses dynamically
+        for valve, opening in self.control_valves:
+            h += valve.head_loss_m(q, opening)
+            
+        return float(h) if np.isscalar(q) else h
 
     def __call__(self, q: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         return self.evaluate(q)
