@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>pump-system-analyzer — Simulador Termo-Hidráulico & Auditor de Cavitación NPSH</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- KaTeX for math formulas -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="flex flex-col min-h-screen text-slate-100 antialiased selection:bg-sky-500 selection:text-white">
+
+  <!-- Header -->
+  <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-50 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        
+        <!-- Logo & Branding -->
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 text-xl shadow-inner">
+            <i class="fa-solid fa-water"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-lg font-bold tracking-tight text-white font-mono">pump-system-analyzer</span>
+              <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-sky-950 text-sky-400 border border-sky-800">v2.0.0</span>
+            </div>
+            <p class="text-xs text-slate-400 hidden sm:block">Simulador Termo-Hidráulico, Punto de Operación & Auditor de Cavitación NPSH</p>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="hidden md:flex space-x-1">
+          <button class="nav-tab-btn active-tab px-3 py-2 text-xs font-semibold rounded-t flex items-center gap-1.5 transition" data-tab="workbench">
+            <i class="fa-solid fa-chart-line"></i> Simulación & Curvas
+          </button>
+          <button class="nav-tab-btn inactive-tab px-3 py-2 text-xs font-semibold rounded-t flex items-center gap-1.5 transition" data-tab="catalog">
+            <i class="fa-solid fa-table-list"></i> Catálogo & Puntos
+          </button>
+          <button class="nav-tab-btn inactive-tab px-3 py-2 text-xs font-semibold rounded-t flex items-center gap-1.5 transition" data-tab="npsh-audit">
+            <i class="fa-solid fa-triangle-exclamation"></i> Auditoría NPSH
+          </button>
+          <button class="nav-tab-btn inactive-tab px-3 py-2 text-xs font-semibold rounded-t flex items-center gap-1.5 transition" data-tab="theory">
+            <i class="fa-solid fa-book-bookmark"></i> Tratado & Ecuaciones
+          </button>
+        </nav>
+
+        <!-- Tools: Preset & GitHub -->
+        <div class="flex items-center gap-2">
+          <button id="print-report-btn" title="Imprimir / Exportar PDF de Ficha Técnica" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded text-xs font-semibold flex items-center gap-1.5 transition shadow">
+            <i class="fa-solid fa-print"></i> <span class="hidden sm:inline">Reporte</span>
+          </button>
+          <a href="https://github.com/lorenhey/pump-system-analyzer" target="_blank" rel="noopener noreferrer" class="text-slate-400 hover:text-white p-2 text-sm" title="Ver Repositorio en GitHub">
+            <i class="fa-brands fa-github"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Navigation Bar -->
+    <div class="md:hidden flex overflow-x-auto px-2 border-t border-slate-800 py-1 space-x-1 bg-slate-950">
+      <button class="nav-tab-btn active-tab px-2.5 py-1 text-xs whitespace-nowrap rounded" data-tab="workbench">Simulación</button>
+      <button class="nav-tab-btn inactive-tab px-2.5 py-1 text-xs whitespace-nowrap rounded" data-tab="catalog">Catálogo</button>
+      <button class="nav-tab-btn inactive-tab px-2.5 py-1 text-xs whitespace-nowrap rounded" data-tab="npsh-audit">NPSH</button>
+      <button class="nav-tab-btn inactive-tab px-2.5 py-1 text-xs whitespace-nowrap rounded" data-tab="theory">Teoría</button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="flex-grow max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+    <!-- Preset Selector Bar -->
+    <div class="card-panel p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-l-4 border-sky-500 shadow-lg">
+      <div class="flex items-center gap-3">
+        <i class="fa-solid fa-sliders text-sky-400 text-lg"></i>
+        <div>
+          <label class="text-xs font-bold text-slate-300 block uppercase tracking-wider">Plantilla / Preset Industrial</label>
+          <select id="preset-selector" class="w-full sm:w-80 font-medium text-sky-300 mt-1 cursor-pointer"></select>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+        <button id="export-json-btn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs text-slate-300 font-mono flex items-center gap-1.5">
+          <i class="fa-solid fa-file-code"></i> JSON Manifest
+        </button>
+        <button id="export-csv-btn" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-xs text-slate-300 font-mono flex items-center gap-1.5">
+          <i class="fa-solid fa-file-csv"></i> CSV Curva
+        </button>
+      </div>
+    </div>
+
+    <!-- TAB 1: WORKBENCH (SIMULACIÓN & CURVAS) -->
+    <section id="tab-workbench" class="tab-content space-y-6">
+      
+      <!-- Key KPI Cards Row -->
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="card-panel p-3 text-center border-t-2 border-sky-400">
+          <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Caudal Q_op</span>
+          <div id="op-q" class="text-xl font-mono font-black text-white mt-1">--</div>
+          <span class="text-[10px] text-slate-500">Punto de Trabajo</span>
+        </div>
+        <div class="card-panel p-3 text-center border-t-2 border-amber-400">
+          <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Altura H_op</span>
+          <div id="op-h" class="text-xl font-mono font-black text-amber-300 mt-1">--</div>
+          <span class="text-[10px] text-slate-500">Altura Manométrica</span>
+        </div>
+        <div class="card-panel p-3 text-center border-t-2 border-emerald-400">
+          <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Rendimiento η</span>
+          <div id="op-eff" class="text-xl font-mono font-black text-emerald-400 mt-1">--</div>
+          <span class="text-[10px] text-slate-500">Eficiencia Hidráulica</span>
+        </div>
+        <div class="card-panel p-3 text-center border-t-2 border-purple-400">
+          <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Potencia Eje</span>
+          <div id="op-power" class="text-xl font-mono font-black text-purple-300 mt-1">--</div>
+          <span class="text-[10px] text-slate-500">Potencia al Freno</span>
+        </div>
+        <div class="card-panel p-3 text-center border-t-2 border-rose-400">
+          <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Margen NPSH</span>
+          <div id="res-delta-npsh" class="text-xl font-mono font-black text-rose-300 mt-1">--</div>
+          <div id="npsh-status-badge" class="mt-1 inline-block px-1.5 py-0.5 rounded text-[9px] font-bold badge-safe">CALCULANDO</div>
+        </div>
+        <div class="card-panel p-3 text-center border-t-2 border-indigo-400">
+          <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">OPEX Anual</span>
+          <div id="op-annual-cost" class="text-xl font-mono font-black text-indigo-300 mt-1">--</div>
+          <span id="op-annual-kwh" class="text-[10px] text-slate-400 block truncate">--</span>
+        </div>
+      </div>
+
+      <!-- Main Layout: Left Parameters & Right Charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left Controls Column (4 cols) -->
+        <div class="lg:col-span-4 space-y-4">
+          
+          <!-- Accordion 1: Bomba & VFD -->
+          <div class="card-panel p-4 space-y-3">
+            <h3 class="text-sm font-bold text-white flex items-center justify-between">
+              <span><i class="fa-solid fa-gears text-sky-400 mr-1.5"></i> Bomba & Leyes de Afinidad</span>
+              <span class="text-xs font-mono text-slate-400">API 610 / ISO 5199</span>
+            </h3>
+
+            <div>
+              <label class="text-xs text-slate-400 block">Nombre / Identificación</label>
+              <input type="text" id="pump-name" class="w-full mt-1">
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-xs text-slate-400 block">Velocidad Nominal</label>
+                <div class="flex items-center gap-1 mt-1">
+                  <input type="number" id="speed-rpm" class="w-full">
+                  <span class="text-xs text-slate-400 font-mono">RPM</span>
+                </div>
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 block">Configuración</label>
+                <select id="staging-mode" class="w-full mt-1">
+                  <option value="single">1 Bomba Individual</option>
+                  <option value="parallel">2 en Paralelo (2x Q)</option>
+                  <option value="series">2 en Serie (2x H)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- VFD Slider -->
+            <div class="bg-slate-800/40 p-2.5 rounded border border-slate-700/60 space-y-1">
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-300 font-medium"><i class="fa-solid fa-gauge-high text-amber-400 mr-1"></i> Variador VFD (Velocidad)</span>
+                <span id="vfd-speed-val" class="font-mono text-amber-400 font-bold">100 %</span>
+              </div>
+              <input type="range" id="vfd-speed-slider" min="50" max="115" step="1" value="100" class="w-full accent-amber-400 cursor-pointer">
+              <div class="flex justify-between text-[10px] text-slate-500">
+                <span>50% (Mínimo térmico)</span>
+                <span>100%</span>
+                <span>115% (Sobrefrecuencia)</span>
+              </div>
+            </div>
+
+            <!-- Impeller Trim Slider -->
+            <div class="bg-slate-800/40 p-2.5 rounded border border-slate-700/60 space-y-1">
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-300 font-medium"><i class="fa-solid fa-compact-disc text-sky-400 mr-1"></i> Recorte de Impulsor</span>
+                <span id="impeller-trim-val" class="font-mono text-sky-400 font-bold">100 %</span>
+              </div>
+              <input type="range" id="impeller-trim-slider" min="80" max="105" step="1" value="100" class="w-full accent-sky-400 cursor-pointer">
+            </div>
+          </div>
+
+          <!-- Accordion 2: Fluido & Temperatura -->
+          <div class="card-panel p-4 space-y-3">
+            <h3 class="text-sm font-bold text-white flex items-center justify-between">
+              <span><i class="fa-solid fa-temperature-half text-rose-400 mr-1.5"></i> Fluido & Propiedades Térmicas</span>
+              <span class="text-xs font-mono text-slate-400">IAPWS-97</span>
+            </h3>
+
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <label class="text-slate-300 font-medium">Temperatura del Líquido</label>
+                <span class="font-mono text-rose-400 font-bold" id="temp-display">25 °C</span>
+              </div>
+              <input type="range" id="fluid-temp" min="5" max="120" step="1" value="25" class="w-full accent-rose-400 cursor-pointer" oninput="document.getElementById('temp-display').textContent = this.value + ' °C'">
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 text-center bg-slate-800/50 p-2 rounded border border-slate-800">
+              <div>
+                <span class="text-[10px] text-slate-400 block">Densidad ρ</span>
+                <span id="fluid-density-val" class="text-xs font-mono font-bold text-white">997 kg/m³</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block">Presión Vapor P_v</span>
+                <span id="fluid-vapor-val" class="text-xs font-mono font-bold text-amber-300">3.17 kPa</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block">Viscosidad μ</span>
+                <span id="fluid-visc-val" class="text-xs font-mono font-bold text-sky-300">0.89 mPa.s</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Accordion 3: Cañería de Succión e Impulsión -->
+          <div class="card-panel p-4 space-y-3">
+            <h3 class="text-sm font-bold text-white flex items-center justify-between">
+              <span><i class="fa-solid fa-arrows-split-up-and-left text-emerald-400 mr-1.5"></i> Instalación & Cañería</span>
+              <span class="text-xs font-mono text-slate-400">Darcy-Weisbach</span>
+            </h3>
+
+            <!-- Succión -->
+            <div class="border-b border-slate-800 pb-3 space-y-2">
+              <span class="text-xs font-bold text-sky-400 block flex items-center gap-1">
+                <i class="fa-solid fa-arrow-down-to-bracket"></i> Línea de Succión (Aspiración)
+              </span>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span class="text-slate-400">Longitud L (m)</span>
+                  <input type="number" id="suct-len" class="w-full mt-0.5" step="0.5">
+                </div>
+                <div>
+                  <span class="text-slate-400">Diámetro D (mm)</span>
+                  <input type="number" id="suct-diam" class="w-full mt-0.5" step="5">
+                </div>
+                <div>
+                  <span class="text-slate-400">Pérdidas K_minor</span>
+                  <input type="number" id="suct-k" class="w-full mt-0.5" step="0.1">
+                </div>
+                <div>
+                  <span class="text-slate-400">Nivel Líquido Z_s (m)</span>
+                  <input type="number" id="suct-z" class="w-full mt-0.5" step="0.5" title="Positivo: En carga. Negativo: En aspiración bajo nivel bomba">
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span class="text-slate-400">Presión Tanque (bar abs)</span>
+                  <input type="number" id="suct-p-abs" class="w-full mt-0.5" step="0.05">
+                </div>
+                <div>
+                  <span class="text-slate-400">Rugosidad ε (mm)</span>
+                  <input type="number" id="suct-rough" class="w-full mt-0.5" step="0.005">
+                </div>
+              </div>
+            </div>
+
+            <!-- Descarga -->
+            <div class="space-y-2">
+              <span class="text-xs font-bold text-amber-400 block flex items-center gap-1">
+                <i class="fa-solid fa-arrow-up-from-bracket"></i> Línea de Impulsión (Descarga)
+              </span>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span class="text-slate-400">Longitud L (m)</span>
+                  <input type="number" id="disch-len" class="w-full mt-0.5" step="1">
+                </div>
+                <div>
+                  <span class="text-slate-400">Diámetro D (mm)</span>
+                  <input type="number" id="disch-diam" class="w-full mt-0.5" step="5">
+                </div>
+                <div>
+                  <span class="text-slate-400">Pérdidas K_minor</span>
+                  <input type="number" id="disch-k" class="w-full mt-0.5" step="0.2">
+                </div>
+                <div>
+                  <span class="text-slate-400">Cota Descarga Z_d (m)</span>
+                  <input type="number" id="disch-z" class="w-full mt-0.5" step="0.5">
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span class="text-slate-400">Presión Destino (bar abs)</span>
+                  <input type="number" id="disch-p-abs" class="w-full mt-0.5" step="0.1">
+                </div>
+                <div>
+                  <span class="text-slate-400">Rugosidad ε (mm)</span>
+                  <input type="number" id="disch-rough" class="w-full mt-0.5" step="0.005">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Accordion 4: Costos & Energía -->
+          <div class="card-panel p-4 space-y-2">
+            <h3 class="text-sm font-bold text-white flex items-center justify-between">
+              <span><i class="fa-solid fa-bolt text-yellow-400 mr-1.5"></i> Parámetros OPEX & Motor</span>
+            </h3>
+            <div class="grid grid-cols-3 gap-2 text-xs">
+              <div>
+                <span class="text-slate-400">Horas/año</span>
+                <input type="number" id="energy-hours" class="w-full mt-0.5" step="500">
+              </div>
+              <div>
+                <span class="text-slate-400">Tarifa ($/kWh)</span>
+                <input type="number" id="energy-tariff" class="w-full mt-0.5" step="0.01">
+              </div>
+              <div>
+                <span class="text-slate-400">η Motor (%)</span>
+                <input type="number" id="motor-eff" class="w-full mt-0.5" step="0.5">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Charts & Diagnostics Column (8 cols) -->
+        <div class="lg:col-span-8 space-y-4">
+          
+          <!-- Chart 1: Curva H-Q vs Curva de Sistema -->
+          <div class="card-panel p-4 space-y-3">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-2">
+              <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-chart-area text-sky-400"></i> Curva Característica de Bomba vs. Curva de la Instalación
+              </h2>
+              <span class="text-xs font-mono text-slate-400">H_pump(Q) = H_sys(Q)</span>
+            </div>
+            
+            <div class="relative w-full h-80">
+              <canvas id="mainCurveChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Chart 2: NPSHa vs NPSHr & Potencia -->
+          <div class="card-panel p-4 space-y-3">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                <i class="fa-solid fa-wave-square text-rose-400"></i> Cavitación: NPSH Requerido (Catálogo) vs NPSH Disponible (Instalación)
+              </h2>
+              <span class="text-xs font-mono text-slate-400">Margen = NPSHa - NPSHr</span>
+            </div>
+            
+            <div class="relative w-full h-56">
+              <canvas id="npshPowerChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Diagnostic & Hydraulic Check Box -->
+          <div class="card-panel p-4 bg-slate-900/90 border border-slate-800 space-y-2">
+            <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+              <i class="fa-solid fa-stethoscope text-sky-400"></i> Diagnóstico Hidrodinámico & Velocidades
+            </h3>
+            
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs py-1 border-b border-slate-800 font-mono">
+              <div>Velocidad Succión: <span id="v-suct" class="text-white font-bold">--</span></div>
+              <div>Velocidad Impulsión: <span id="v-disch" class="text-white font-bold">--</span></div>
+              <div>Potencia Eléctrica: <span id="op-electrical" class="text-white font-bold">--</span></div>
+              <div>Consumo Específico: <span id="res-spec-energy" class="text-white font-bold">--</span></div>
+            </div>
+
+            <div id="diag-msg" class="text-xs text-slate-300 leading-relaxed pt-1">
+              Cargando simulación...
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: CATALOG & DATA TABLE -->
+    <section id="tab-catalog" class="tab-content hidden space-y-4">
+      <div class="card-panel p-5 space-y-4">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-3">
+          <div>
+            <h2 class="text-base font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-table text-sky-400"></i> Editor de Puntos de Curva de Bomba
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Ingresá los puntos del catálogo del fabricante. La interpolación PCHIP garantiza conservación de curvatura monótona.</p>
+          </div>
+          <button id="add-point-btn" class="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded text-xs font-semibold flex items-center gap-1.5 shadow">
+            <i class="fa-solid fa-plus"></i> Agregar Fila
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="border-b border-slate-700 bg-slate-800/60 text-slate-300 text-xs font-bold uppercase tracking-wider">
+                <th class="p-2.5">Caudal Q (m³/h)</th>
+                <th class="p-2.5">Altura H (m)</th>
+                <th class="p-2.5">Rendimiento η (%)</th>
+                <th class="p-2.5">Potencia P (kW)</th>
+                <th class="p-2.5">NPSHr (m)</th>
+                <th class="p-2.5 text-center">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="points-tbody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: AUDITORÍA NPSH DETALLADA -->
+    <section id="tab-npsh-audit" class="tab-content hidden space-y-4">
+      <div class="card-panel p-5 space-y-6">
+        <div class="border-b border-slate-800 pb-3">
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-shield-halved text-rose-400"></i> Auditoría Forense de Cavitación & Succión
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">Comparación rigurosa de márgenes NPSH bajo normas HI 9.6.1 y API 610 para prevenir cavitación, erosión del impulsor y vibración excesiva.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div class="card-panel p-4 bg-slate-900 border border-slate-800 text-center">
+            <span class="text-xs text-slate-400 block uppercase">NPSH Disponible (NPSHa)</span>
+            <div id="res-npsha" class="text-2xl font-mono font-bold text-sky-400 mt-2">--</div>
+            <p class="text-[10px] text-slate-500 mt-1">Presión absoluta neta en la brida de aspiración</p>
+          </div>
+          <div class="card-panel p-4 bg-slate-900 border border-slate-800 text-center">
+            <span class="text-xs text-slate-400 block uppercase">NPSH Requerido (NPSHr)</span>
+            <div id="res-npshr" class="text-2xl font-mono font-bold text-rose-400 mt-2">--</div>
+            <p class="text-[10px] text-slate-500 mt-1">Límite de caída de 3% en altura según catálogo</p>
+          </div>
+          <div class="card-panel p-4 bg-slate-900 border border-slate-800 text-center">
+            <span class="text-xs text-slate-400 block uppercase">Margen Absoluto (ΔNPSH)</span>
+            <div id="res-delta-npsh-tab" class="text-2xl font-mono font-bold text-amber-400 mt-2">--</div>
+            <p class="text-[10px] text-slate-500 mt-1">Diferencia: NPSHa - NPSHr (Recomendado ≥ 1.0 m)</p>
+          </div>
+          <div class="card-panel p-4 bg-slate-900 border border-slate-800 text-center">
+            <span class="text-xs text-slate-400 block uppercase">Ratio de Margen</span>
+            <div id="res-npsh-ratio" class="text-2xl font-mono font-bold text-emerald-400 mt-2">--</div>
+            <p class="text-[10px] text-slate-500 mt-1">Cociente: NPSHa / NPSHr (Recomendado ≥ 1.20)</p>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 p-4 rounded-lg border border-slate-800 space-y-3">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-circle-info text-sky-400"></i> Fórmulas de Desglose de Aspiración
+          </h3>
+          <div class="text-xs font-mono text-slate-300 space-y-2 bg-slate-950 p-3 rounded border border-slate-800">
+            <div>NPSHa = [ (P_suct_abs - P_vapor) / (ρ · g) ] + (Z_nivel - Z_bomba) - h_f_succión</div>
+            <div class="text-slate-500 text-[11px] font-sans">Donde P_suct_abs es la presión absoluta sobre la superficie del líquido, P_vapor la presión de vapor a la temperatura de proceso, y h_f_succión las pérdidas continuas y secundarias combinadas.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: TRATADO & FUNDAMENTOS TEÓRICOS -->
+    <section id="tab-theory" class="tab-content hidden space-y-4">
+      <div class="card-panel p-6 space-y-6">
+        <div class="border-b border-slate-800 pb-3">
+          <h2 class="text-lg font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-graduation-cap text-sky-400"></i> Tratado de Turbomáquinas Hidráulicas & Redes de Tuberías
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">Ecuaciones fundamentales de conservación de energía, interpolación monótona PCHIP y leyes de similitud dinámica.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-slate-300 leading-relaxed">
+          <div class="space-y-3 bg-slate-900/60 p-4 rounded border border-slate-800">
+            <h3 class="text-sm font-bold text-sky-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-calculator"></i> Ecuación de Pérdida de Carga de Darcy-Weisbach
+            </h3>
+            <p>La altura manométrica disipada por fricción en una conducción recta de sección circular responde a la formulación empírica exacta:</p>
+            <div class="p-2 bg-slate-950 rounded font-mono text-slate-200">
+              h_f = f · (L / D) · (v² / 2g)
+            </div>
+            <p>Para flujo turbulento, el factor de fricción $f$ se calcula resolviendo la ecuación implícita de Colebrook-White mediante la aproximación explícita de Swamee-Jain:</p>
+            <div class="p-2 bg-slate-950 rounded font-mono text-slate-200">
+              f = 0.25 / [ log10( (ε / 3.7D) + (5.74 / Re^0.9) ) ]²
+            </div>
+          </div>
+
+          <div class="space-y-3 bg-slate-900/60 p-4 rounded border border-slate-800">
+            <h3 class="text-sm font-bold text-amber-400 flex items-center gap-1.5">
+              <i class="fa-solid fa-sync"></i> Leyes de Afinidad para Variadores de Frecuencia (VFD)
+            </h3>
+            <p>Al variar la velocidad angular de giro de $N_1$ a $N_2$ o el diámetro del impulsor de $D_1$ a $D_2$, los puntos homólogos escalan según:</p>
+            <div class="p-2 bg-slate-950 rounded font-mono text-slate-200 space-y-1">
+              <div>Q₂ = Q₁ · (N₂ / N₁) · (D₂ / D₁)</div>
+              <div>H₂ = H₁ · (N₂ / N₁)² · (D₂ / D₁)²</div>
+              <div>P₂ = P₁ · (N₂ / N₁)³ · (D₂ / D₁)³</div>
+            </div>
+            <p class="text-slate-400 text-[11px]">Nota: La potencia al cubo implica que una reducción del 20% en velocidad (a 80% RPM) reduce el consumo de potencia a casi la mitad (~51.2%), evidenciando la ineficiencia de estrangular válvulas de control en comparación con control VFD.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-slate-950 border-t border-slate-800 text-xs text-slate-500 py-4 mt-8">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
+      <div>pump-system-analyzer v2.0.0 — Parte del portafolio de ingeniería de <a href="https://github.com/lorenhey" class="text-sky-400 hover:underline">lorenhey</a></div>
+      <div class="flex items-center gap-4">
+        <span>ISO 5199 / API 610 / HI 9.6.1</span>
+        <span>Ejecución 100% Offline</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/pump-engine.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

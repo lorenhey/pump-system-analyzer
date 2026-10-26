@@ -12,7 +12,7 @@ ENV/
 
 # Output
 *.pdf
-*.html
+!index.html
 *.json
 !analysis-manifest.json
 
